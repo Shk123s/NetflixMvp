@@ -3,7 +3,7 @@ const connection = require("./database");
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const router = express.Router();
-
+const jwt = require('jsonwebtoken')
 const getuser = async (req, res) => {
     try {
       const {is_active, limit, offset ,sortby} = req.query;
@@ -204,7 +204,7 @@ const getuser = async (req, res) => {
           message: "missing parameter",
         });
       } 
-       const  sqlquery2 = "select email ,password from users where email=?";
+       const  sqlquery2 = "select id ,email ,password from users where email=?";
         const [resultspassword] = await connection
           .promise() 
           .execute(sqlquery2, [email]);
@@ -215,19 +215,16 @@ const getuser = async (req, res) => {
         
         const hasspassword = resultspassword[0].password;
         const passedpassword = await bcrypt.compare(password,hasspassword);
-        console.log(passedpassword)
-        
+        // console.log(passedpassword)
+        const token = jwt.sign({user_id:resultspassword[0].id,},"shhhhh");
+        // console.log(token.user_id)
         if ( passedpassword) {
-          console.log("object")
+        
           res.status(200).send({
             message: "Login successfully",
-            passedpassword
+            passedpassword,
+            token
           });
-        }
-        else
-        {
-         console.log("object")
-          
         }
         
       
@@ -300,24 +297,29 @@ const getuser = async (req, res) => {
   }
 
 const middleware = (req,res,next)=>{
-    const {user_id,token} = req.headers
-   if (user_id && token) {
-    // console.log("object")
-    next();
+   if (req.headers && req.headers.token) {
+    try {
+      
+      const token = req.headers.token;
+      const decodetoken = jwt.verify(token,"shhhhh")
+    } catch (error) {
+      res.status(200).send({message:"Invalid token"})
+    }
+    next()
+    return;
    }
-   else{
-    res.status(400).send({message:"Invalid request"})
-   }
-
+   res.status(400).send({
+    message: "Token Required"
+  })
   } 
   
   
 
-router.post("/v1/users/login", userLogin);
+router.post("/v1/users/login", middleware,userLogin);
 router.post("/v1/users/forgetpassword", forgetpassword);
 router.post("/v1/users/resetpassword",resetpassword)
 router.post("/v1/users", Addusers);
-router.get("/v1/users", getuser);
+router.get("/v1/users", middleware,getuser);
 router.put("/v1/users/:id", updateUser);
 //soft delete 
 router.post("/v1/users/:id", deleteUser);
